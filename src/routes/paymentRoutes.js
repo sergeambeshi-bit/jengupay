@@ -1,10 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../config/db');
 
 /*
 |--------------------------------------------------------------------------
-| Initiate Payment
+| Temporary In-Memory Mock Store
+|--------------------------------------------------------------------------
+*/
+const mockPayments = {};
+
+/*
+|--------------------------------------------------------------------------
+| Initiate Payment (Mock)
 |--------------------------------------------------------------------------
 */
 router.post('/initiate', async (req, res) => {
@@ -20,50 +26,45 @@ router.post('/initiate', async (req, res) => {
 
     const reference = `JGP-${Date.now()}`;
 
-    const result = await db.query(
-      `
-      INSERT INTO payments (reference, amount, provider, phone, status)
-      VALUES ($1, $2, $3, $4, $5)
-      RETURNING *
-      `,
-      [reference, amount, provider, phone, 'pending']
-    );
+    const payment = {
+      reference,
+      amount,
+      provider,
+      phone,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+
+    mockPayments[reference] = payment;
 
     return res.status(200).json({
       success: true,
-      message: 'Payment initiated successfully',
-      data: result.rows[0]
+      message: 'Mock payment initiated successfully',
+      data: payment
     });
 
   } catch (error) {
-    console.error('DB Insert Error:', error);
+    console.error('Mock Initiate Error:', error);
 
     return res.status(500).json({
       success: false,
-      message: 'Database error'
+      message: 'Mock payment initiation failed'
     });
   }
 });
 
 /*
 |--------------------------------------------------------------------------
-| Get Payment Status
+| Get Payment Status (Mock)
 |--------------------------------------------------------------------------
 */
 router.get('/:reference', async (req, res) => {
   try {
     const { reference } = req.params;
 
-    const result = await db.query(
-      `
-      SELECT * FROM payments
-      WHERE reference = $1
-      LIMIT 1
-      `,
-      [reference]
-    );
+    const payment = mockPayments[reference];
 
-    if (result.rows.length === 0) {
+    if (!payment) {
       return res.status(404).json({
         success: false,
         message: 'Payment not found'
@@ -72,22 +73,22 @@ router.get('/:reference', async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      data: result.rows[0]
+      data: payment
     });
 
   } catch (error) {
-    console.error('Status Fetch Error:', error);
+    console.error('Mock Status Error:', error);
 
     return res.status(500).json({
       success: false,
-      message: 'Database error'
+      message: 'Mock status fetch failed'
     });
   }
 });
 
 /*
 |--------------------------------------------------------------------------
-| Mock Confirm Payment (Testing Only)
+| Mock Confirm Payment
 |--------------------------------------------------------------------------
 */
 router.post('/mock-confirm/:reference', async (req, res) => {
@@ -102,27 +103,22 @@ router.post('/mock-confirm/:reference', async (req, res) => {
       });
     }
 
-    const result = await db.query(
-      `
-      UPDATE payments
-      SET status = $1
-      WHERE reference = $2
-      RETURNING *
-      `,
-      [status, reference]
-    );
+    const payment = mockPayments[reference];
 
-    if (result.rows.length === 0) {
+    if (!payment) {
       return res.status(404).json({
         success: false,
         message: 'Payment not found'
       });
     }
 
+    payment.status = status;
+    payment.updatedAt = new Date().toISOString();
+
     return res.status(200).json({
       success: true,
-      message: 'Payment updated successfully',
-      data: result.rows[0]
+      message: 'Mock payment updated successfully',
+      data: payment
     });
 
   } catch (error) {
@@ -130,7 +126,7 @@ router.post('/mock-confirm/:reference', async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: 'Database error'
+      message: 'Mock confirm failed'
     });
   }
 });
